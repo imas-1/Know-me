@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Know Me</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #180F28; color: #fff; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .display { font-family: 'Fraunces', serif; }
+  input, textarea { font-family: inherit; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform: translateY(0);} }
+  @keyframes drift { 0%,100%{transform:translateX(-50%) translateY(0) scale(1);} 50%{transform:translateX(-46%) translateY(2%) scale(1.05);} }
+  @keyframes floatDown { 0%{transform:translateY(-40px) rotate(0deg); opacity:0;} 10%{opacity:.85;} 100%{transform:translateY(680px) rotate(200deg); opacity:0;} }
+  @keyframes pop { 0%{transform:scale(.3); opacity:0;} 60%{transform:scale(1.15); opacity:1;} 100%{transform:scale(1); opacity:1;} }
+  @keyframes cardIn { from{opacity:0; transform:translateY(10px) scale(.98);} to{opacity:1; transform:translateY(0) scale(1);} }
+  @keyframes podiumIn { from{opacity:0; transform:scaleY(.3) translateY(20px);} to{opacity:1; transform:scaleY(1) translateY(0);} }
+  @keyframes confettiFall { 0%{transform:translateY(-20px) rotate(0deg); opacity:1;} 100%{transform:translateY(700px) rotate(500deg); opacity:0;} }
+  @keyframes joinIn { from{opacity:0; transform:scale(.9) translateX(-8px);} to{opacity:1; transform:scale(1) translateX(0);} }
+  .spotlight-glow { position:absolute; top:-20%; left:50%; width:140%; height:90%; transform:translateX(-50%);
+    background: radial-gradient(closest-side, rgba(242,183,5,0.16), rgba(233,79,146,0.08) 45%, transparent 70%);
+    filter: blur(10px); animation: drift 14s ease-in-out infinite; }
+  .party-piece { position:absolute; top:-40px; animation-name: floatDown; animation-timing-function: ease-in; animation-iteration-count: infinite; opacity:.85; }
+  .confetti-bit { position:absolute; top:-20px; width:8px; height:14px; border-radius:2px; animation: confettiFall 1.4s ease-in forwards; }
+  .card-anim { animation: cardIn .35s ease backwards; }
+  .join-anim { animation: joinIn .45s cubic-bezier(.34,1.56,.64,1) backwards; }
+  .podium-anim { animation: podiumIn .5s cubic-bezier(.34,1.56,.64,1) backwards; transform-origin: bottom; }
+  .pop-anim { animation: pop .42s cubic-bezier(.34,1.56,.64,1); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------- Firebase (real backend) ---------- */
+import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js").then(async (appMod) => {
+  const authMod = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js");
+  const fsMod = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDvFEtgMdIdIkS54XCJKgMracslAOJXda0",
+    authDomain: "know-me-8c8c4.firebaseapp.com",
+    projectId: "know-me-8c8c4",
+    storageBucket: "know-me-8c8c4.firebasestorage.app",
+    messagingSenderId: "797680308314",
+    appId: "1:797680308314:web:99b7aa9e808875d4564863",
+  };
+  const app = appMod.initializeApp(firebaseConfig);
+  const auth = authMod.getAuth(app);
+  const db = fsMod.getFirestore(app);
+
+  const fb = { ...fsMod, auth, db, signInAnonymously: authMod.signInAnonymously, onAuthStateChanged: authMod.onAuthStateChanged };
+  window.__fb = fb;
+  window.dispatchEvent(new Event("fb-ready"));
+});
+
+function playTone(freq, duration = 0.15, type = "sine") {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + duration);
+  } catch (e) {}
+}
+const sfx = {
+  correct: () => { playTone(660, .12); setTimeout(() => playTone(880, .18), 100); },
+  wrong: () => playTone(180, .25, "sawtooth"),
+  drum: () => playTone(90, .08, "square"),
+  cheer: () => [520, 660, 780].forEach((f, i) => setTimeout(() => playTone(f, .2), i * 90)),
+};
+
+/* ---------- Question bank (host fills these to create a game) ---------- */
+const QUESTION_BANK = [
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Care este mâncarea mea preferată?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Care este filmul meu preferat?" },
+  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "Dacă aș câștiga un milion de euro, ce aș face primul?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Pizza", "Burger"], prompt: "Pizza sau Burger?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Mare", "Munte"], prompt: "Mare sau Munte?" },
+  { round: "Story Time", icon: "📖", type: "text", prompt: "Cea mai mare prostie făcută la 12 ani (începe povestea)" },
+  { round: "First Thing", icon: "🌅", type: "text", prompt: "Primul lucru pe care îl fac dimineața?" },
+  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "Nu pot trăi fără..." },
+  { round: "Award Me", icon: "🏅", type: "choice", options: ["Cel mai amuzant", "Cel mai organizat", "Cel mai aventuros"], prompt: "Ce premiu ți s-ar potrivi?" },
+  { round: "Secret Talent", icon: "🎭", type: "text", prompt: "Un talent surprinzător al tău?" },
+  { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită-mă când râd — hostul votează live cea mai bună interpretare." },
+  { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită cum dansez — hostul votează live cea mai bună interpretare." },
+];
+
+const TITLES = [
+  { min: 85, label: "Detectivul", icon: "🧠" },
+  { min: 65, label: "Cel mai bun prieten", icon: "🏆" },
+  { min: 40, label: "Ghicitorul", icon: "🔥" },
+  { min: 0, label: "Aproape străin", icon: "🙈" },
+];
+function titleFor(pct) { return TITLES.find((t) => pct >= t.min); }
+
+function normText(s) { return (s || "").toString().trim().toLowerCase(); }
+function fuzzyMatch(a, b) {
+  const na = normText(a), nb = normText(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  return na.includes(nb) || nb.includes(na);
+}
+
+/* ---------- Shared UI bits ---------- */
+function Spotlight() { return <div className="pointer-events-none absolute inset-0 overflow-hidden"><div className="spotlight-glow" /></div>; }
+const PARTY_EMOJI = ["🎈","🎉","✨","🎊"];
+function PartyBg() {
+  const pieces = useMemo(() => Array.from({length:14},(_,i)=>({id:i, emoji:PARTY_EMOJI[i%4], left:Math.round(Math.random()*100), delay:(Math.random()*6).toFixed(2), dur:(10+Math.random()*8).toFixed(2), size:16+Math.round(Math.random()*18)})),[]);
+  return <div className="pointer-events-none absolute inset-0 overflow-hidden">{pieces.map(p=>(<span key={p.id} className="party-piece" style={{left:`${p.left}%`, fontSize:p.size, animationDelay:`${p.delay}s`, animationDuration:`${p.dur}s`}}>{p.emoji}</span>))}</div>;
+}
+function ConfettiBurst() {
+  const bits = useMemo(() => Array.from({length:22},(_,i)=>({id:i,left:Math.round(Math.random()*100),delay:(Math.random()*.3).toFixed(2),color:["#fcd34d","#f472b6","#60a5fa","#4ade80"][i%4]})),[]);
+  return <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">{bits.map(b=>(<span key={b.id} className="confetti-bit" style={{left:`${b.left}%`, background:b.color, animationDelay:`${b.delay}s`}} />))}</div>;
+}
+function Primary({children,onClick,disabled,className=""}) {
+  return <button onClick={onClick} disabled={disabled} className={`w-full rounded-2xl bg-gradient-to-b from-amber-300 to-amber-400 px-6 py-3.5 font-bold text-[#241531] disabled:opacity-40 ${className}`} style={{fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{children}</button>;
+}
+function Ghost({children,onClick,className=""}) {
+  return <button onClick={onClick} className={`w-full rounded-2xl border border-white/15 bg-white/[0.04] px-6 py-3 text-sm text-white/80 ${className}`}>{children}</button>;
+}
+function Input(props) {
+  return <input {...props} className={`w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-white placeholder-white/25 outline-none focus:border-amber-300/50 mb-3 ${props.className||""}`} />;
+}
+
+/* ---------- App ---------- */
+function App() {
+  const [ready, setReady] = useState(false);
+  const [uid, setUid] = useState(null);
+  const [screen, setScreen] = useState("home"); // home | create | lobby | play | results
+  const [gameId, setGameId] = useState(null);
+  const [roomCode, setRoomCode] = useState(null);
+  const [isHost, setIsHost] = useState(false);
+  const [hostName, setHostName] = useState("Andreea");
+  const [players, setPlayers] = useState([]);
+  const [room, setRoom] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    function onFbReady() {
+      const fb = window.__fb;
+      fb.onAuthStateChanged(fb.auth, (u) => { if (u) { setUid(u.uid); setReady(true); } });
+      fb.signInAnonymously(fb.auth).catch(console.error);
+    }
+    if (window.__fb) onFbReady(); else window.addEventListener("fb-ready", onFbReady);
+  }, []);
+
+  // Listen to room + players once we have a roomCode
+  useEffect(() => {
+    if (!roomCode) return;
+    const fb = window.__fb;
+    const unsubRoom = fb.onSnapshot(fb.doc(fb.db, "rooms", roomCode), (snap) => {
+      if (!snap.exists()) return;
+      setRoom(snap.data());
+      if (snap.data().finalResults) { setResults(snap.data().finalResults); setScreen("results"); }
+    });
+    const unsubPlayers = fb.onSnapshot(fb.collection(fb.db, "rooms", roomCode, "players"), (snap) => {
+      setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubRoom(); unsubPlayers(); };
+  }, [roomCode]);
+
+  async function createGame(answersByIndex) {
+    const fb = window.__fb;
+    const gameRef = await fb.addDoc(fb.collection(fb.db, "games"), { hostId: uid, createdAt: fb.serverTimestamp(), status: "ready" });
+    for (let i = 0; i < QUESTION_BANK.length; i++) {
+      const q = QUESTION_BANK[i];
+      const hostAnswer = q.type === "vote" ? "WINNER" : (answersByIndex[i] || "");
+      await fb.addDoc(fb.collection(fb.db, "games", gameRef.id, "questions"), {
+        ...q, hostAnswer, order: i,
+      });
+    }
+    setGameId(gameRef.id);
+    setQuestions(QUESTION_BANK.map((q, i) => ({ ...q, hostAnswer: answersByIndex[i] || "", order: i })));
+    return gameRef.id;
+  }
+
+  async function createRoom(gId) {
+    const fb = window.__fb;
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    await fb.setDoc(fb.doc(fb.db, "rooms", code), {
+      hostId: uid, hostName, gameId: gId, status: "lobby",
+      currentQuestionIndex: 0, revealed: false, createdAt: fb.serverTimestamp(),
+    });
+    setRoomCode(code); setIsHost(true); setScreen("lobby");
+  }
+
+  async function joinRoom(code, name) {
+    const fb = window.__fb;
+    const roomSnap = await fb.getDoc(fb.doc(fb.db, "rooms", code));
+    if (!roomSnap.exists()) { alert("Cod invalid"); return; }
+    await fb.addDoc(fb.collection(fb.db, "rooms", code, "players"), { name, uid, joinedAt: fb.serverTimestamp(), score: 0 });
+    const gSnap = roomSnap.data();
+    const qSnap = await fb.getDocs(fb.query(fb.collection(fb.db, "games", gSnap.gameId, "questions"), fb.orderBy("order")));
+    setQuestions(qSnap.docs.map((d) => d.data()));
+    setRoomCode(code); setIsHost(false); setScreen("lobby");
+  }
+
+  async function submitGuess(guess) {
+    const fb = window.__fb;
+    await fb.addDoc(fb.collection(fb.db, "rooms", roomCode, "answers"), {
+      playerId: uid, guess, roundIndex: room.currentQuestionIndex, answeredAt: fb.serverTimestamp(),
+    });
+  }
+
+  async function submitVote(winnerUid) {
+    const fb = window.__fb;
+    await fb.addDoc(fb.collection(fb.db, "rooms", roomCode, "answers"), {
+      playerId: winnerUid, guess: "WINNER", roundIndex: room.currentQuestionIndex, answeredAt: fb.serverTimestamp(),
+    });
+  }
+
+  async function revealAnswer() {
+    const fb = window.__fb;
+    await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { revealed: true });
+    sfx.cheer();
+  }
+
+  async function nextQuestion() {
+    const fb = window.__fb;
+    const next = (room.currentQuestionIndex || 0) + 1;
+    if (next >= questions.length) { await finishGame(); return; }
+    await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { currentQuestionIndex: next, revealed: false });
+  }
+
+  async function finishGame() {
+    const fb = window.__fb;
+    const [playersSnap, answersSnap] = await Promise.all([
+      fb.getDocs(fb.collection(fb.db, "rooms", roomCode, "players")),
+      fb.getDocs(fb.collection(fb.db, "rooms", roomCode, "answers")),
+    ]);
+    const pl = playersSnap.docs.map((d) => d.data());
+    const ans = answersSnap.docs.map((d) => d.data());
+    const computed = pl.map((p) => {
+      const mine = ans.filter((a) => a.playerId === p.uid);
+      let correct = 0;
+      mine.forEach((a) => { const q = questions[a.roundIndex]; if (q && fuzzyMatch(q.hostAnswer, a.guess)) correct += 1; });
+      const total = questions.length || 1;
+      const pct = Math.round((correct / total) * 100);
+      return { name: p.name, correct, total, pct, title: titleFor(pct) };
+    }).sort((a, b) => b.pct - a.pct);
+    await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { finalResults: computed, status: "finished" });
+    setResults(computed); setScreen("results"); sfx.cheer();
+  }
+
+  useEffect(() => {
+    if (room && room.status === "playing" && screen === "lobby") setScreen("play");
+  }, [room, screen]);
+
+  if (!ready) return <div className="min-h-screen flex items-center justify-center text-white/50 text-sm">Conectare la Firebase...</div>;
+
+  return (
+    <div className="min-h-screen flex justify-center py-6 px-4">
+      <div className="w-full max-w-md">
+        {screen === "home" && <HomeScreen onCreate={() => setScreen("create")} onJoin={() => setScreen("join")} />}
+        {screen === "create" && <CreateGameScreen onDone={async (answers) => { const gId = await createGame(answers); await createRoom(gId); }} onBack={() => setScreen("home")} />}
+        {screen === "join" && <JoinScreen onBack={() => setScreen("home")} onJoin={joinRoom} />}
+        {screen === "lobby" && <LobbyScreen room={room} roomCode={roomCode} players={players} isHost={isHost} onStart={async () => { const fb = window.__fb; await fb.updateDoc(fb.doc(fb.db,"rooms",roomCode), {status:"playing"}); }} />}
+        {screen === "play" && <PlayScreen room={room} questions={questions} isHost={isHost} players={players} onGuess={submitGuess} onVote={submitVote} onReveal={revealAnswer} onNext={nextQuestion} />}
+        {screen === "results" && <ResultsScreen results={results} hostName={hostName} />}
+      </div>
+    </div>
+  );
+}
+
+function HomeScreen({ onCreate, onJoin }) {
+  return (
+    <div className="relative min-h-[600px] flex flex-col items-center justify-center text-center px-4">
+      <Spotlight /><PartyBg />
+      <div className="relative z-10">
+        <h1 className="display text-5xl leading-tight">Cât de bine te<br/><span className="italic text-amber-300">cunosc</span> prietenii?</h1>
+        <p className="mt-4 text-white/60 text-sm max-w-xs mx-auto">Creează un joc real, salvat în Firebase, și invită oamenii la petrecere.</p>
+        <div className="mt-8 flex flex-col gap-3 max-w-xs mx-auto">
+          <Primary onClick={onCreate}>Creează un joc</Primary>
+          <Ghost onClick={onJoin}>Am un cod de cameră</Ghost>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateGameScreen({ onDone, onBack }) {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const q = QUESTION_BANK[step];
+  const isLast = step === QUESTION_BANK.length - 1;
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="relative min-h-[600px] px-4 py-6">
+      <button onClick={onBack} className="text-white/40 text-sm mb-6">← înapoi</button>
+      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-6">
+        <div className="h-full bg-gradient-to-r from-amber-300 to-pink-400 transition-all" style={{ width: `${((step+1)/QUESTION_BANK.length)*100}%` }} />
+      </div>
+      <p className="text-xs uppercase tracking-widest text-pink-300/80">{q.icon} {q.round}</p>
+      <h2 className="display text-2xl mt-2 mb-5">{q.prompt}</h2>
+      {q.type === "text" ? (
+        <textarea rows={4} value={answers[step]||""} onChange={(e)=>setAnswers({...answers,[step]:e.target.value})}
+          className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none focus:border-amber-300/50 resize-none" placeholder="Răspunsul tău..." />
+      ) : q.type === "choice" ? (
+        <div className="flex flex-col gap-3">
+          {q.options.map(opt => (
+            <button key={opt} onClick={()=>setAnswers({...answers,[step]:opt})}
+              className={`rounded-2xl border px-5 py-3.5 text-left ${answers[step]===opt ? "border-amber-300/60 bg-amber-300/10 text-amber-200":"border-white/10 bg-white/[0.04] text-white/85"}`}>{opt}</button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-white/40 text-sm rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center">
+          🎬 Această probă se votează live la petrecere — nu ai nimic de completat acum.
+        </p>
+      )}
+      <div className="flex gap-3 mt-6">
+        {step>0 && <Ghost onClick={()=>setStep(step-1)}>Înapoi</Ghost>}
+        <Primary disabled={busy} onClick={async ()=>{
+          if (isLast) { setBusy(true); await onDone(answers); } else setStep(step+1);
+        }}>{busy ? "Se creează..." : isLast ? "Generează jocul" : "Următoarea"}</Primary>
+      </div>
+    </div>
+  );
+}
+
+function JoinScreen({ onBack, onJoin }) {
+  const [code, setCode] = useState(""); const [name, setName] = useState(""); const [busy,setBusy]=useState(false);
+  return (
+    <div className="relative min-h-[600px] px-4 py-6">
+      <button onClick={onBack} className="text-white/40 text-sm mb-6">← înapoi</button>
+      <h2 className="display text-2xl mb-4">Intră în cameră</h2>
+      <Input value={code} onChange={(e)=>setCode(e.target.value.toUpperCase().slice(0,6))} placeholder="COD" className="text-center display text-2xl tracking-widest" />
+      <Input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Numele tău" />
+      <Primary disabled={busy} onClick={async ()=>{ setBusy(true); await onJoin(code,name); }}>{busy?"Se conectează...":"Intră în joc"}</Primary>
+    </div>
+  );
+}
+
+function LobbyScreen({ room, roomCode, players, isHost, onStart }) {
+  return (
+    <div className="relative min-h-[600px] px-4 py-6">
+      <Spotlight /><PartyBg />
+      <div className="relative z-10 text-center">
+        <p className="text-xs uppercase tracking-widest text-white/40">codul camerei</p>
+        <p className="display text-5xl tracking-widest text-amber-300 mt-2">{roomCode}</p>
+      </div>
+      <div className="relative z-10 mt-8">
+        <p className="text-xs uppercase tracking-widest text-white/40 mb-3">jucători ({players.length})</p>
+        {players.map((p,i)=>(
+          <div key={p.id} className="join-anim flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 mb-2.5" style={{animationDelay:`${i*90}ms`}}>
+            <span className="text-2xl">🎈</span><span>{p.name}</span>
+          </div>
+        ))}
+        {players.length===0 && <p className="text-white/30 text-sm">se așteaptă jucători...</p>}
+      </div>
+      {isHost && <div className="relative z-10 mt-6"><Primary onClick={onStart}>Începe jocul</Primary></div>}
+      {!isHost && <p className="relative z-10 mt-6 text-center text-white/40 text-sm">Se așteaptă ca hostul să înceapă jocul...</p>}
+    </div>
+  );
+}
+
+function PlayScreen({ room, questions, isHost, players, onGuess, onVote, onReveal, onNext }) {
+  const idx = room?.currentQuestionIndex || 0;
+  const q = questions[idx];
+  const [guess, setGuess] = useState("");
+  const [voted, setVoted] = useState(null);
+  const [phase, setPhase] = useState("answering");
+  const [countStep, setCountStep] = useState(0);
+  const COUNT = ["🥁","3","2","1","💥"];
+
+  useEffect(() => { setPhase("answering"); setGuess(""); setVoted(null); }, [idx]);
+  useEffect(() => {
+    if (room?.revealed) { setPhase("countdown"); setCountStep(0);
+      let s=0; const t=setInterval(()=>{ s++; if(s<COUNT.length){setCountStep(s); sfx.drum();} else {clearInterval(t); setPhase("revealed"); sfx.cheer();} },380);
+      return ()=>clearInterval(t);
+    }
+  }, [room?.revealed]);
+
+  if (!q) return <div className="p-8 text-center text-white/50">Se încarcă întrebarea...</div>;
+
+  return (
+    <div className="relative min-h-[600px] px-4 py-6">
+      <p className="text-xs uppercase tracking-widest text-pink-300/80">{q.icon} {q.round} · întrebarea {idx+1}/{questions.length}</p>
+      <h2 className="display text-2xl mt-2 mb-6">{q.prompt}</h2>
+
+      {phase !== "revealed" && q.type === "vote" && (
+        isHost ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-white/40 text-sm mb-1">Alege cine a avut cea mai bună interpretare:</p>
+            {(players||[]).map(p=>(
+              <button key={p.id} onClick={()=>{ setVoted(p.uid); onVote(p.uid); }}
+                className={`rounded-2xl border px-5 py-3.5 text-left ${voted===p.uid?"border-amber-300/60 bg-amber-300/10 text-amber-200":"border-white/10 bg-white/[0.04]"}`}>
+                {p.name} {voted===p.uid && "🏆"}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-white/40 text-sm rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center">
+            🎭 Fă-ți numărul acum — hostul votează cine câștigă runda!
+          </p>
+        )
+      )}
+
+      {phase !== "revealed" && q.type !== "vote" && (
+        q.type === "choice" ? (
+          <div className="flex flex-col gap-3">
+            {q.options.map(opt=>(<button key={opt} onClick={()=>{setGuess(opt); onGuess(opt);}} className={`rounded-2xl border px-5 py-3.5 text-left ${guess===opt?"border-amber-300/60 bg-amber-300/10 text-amber-200":"border-white/10 bg-white/[0.04]"}`}>{opt}</button>))}
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Input value={guess} onChange={(e)=>setGuess(e.target.value)} placeholder="Ghicește..." className="mb-0" />
+            <button onClick={()=>onGuess(guess)} className="rounded-2xl bg-amber-300 text-[#241531] font-bold px-4">✓</button>
+          </div>
+        )
+      )}
+
+      {phase === "revealed" && (
+        <div className="rounded-2xl border border-emerald-400/40 bg-emerald-400/10 p-4 text-emerald-300 pop-anim">
+          {q.type === "vote" ? "🏆 Câștigătorul rundei a fost votat!" : <>✔️ Răspunsul real: <b>{q.hostAnswer}</b></>}
+        </div>
+      )}
+
+      {phase === "countdown" && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#180F28]/90">
+          <div key={countStep} className="pop-anim display text-7xl text-amber-300">{COUNT[countStep]}</div>
+        </div>
+      )}
+
+      {isHost && (
+        <div className="flex gap-3 mt-8">
+          <Ghost onClick={onReveal}>Arată răspunsul</Ghost>
+          <Primary onClick={onNext}>{idx>=questions.length-1 ? "Finalizează jocul" : "Următoarea"}</Primary>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResultsScreen({ results, hostName }) {
+  if (!results) return <div className="p-8 text-center text-white/50">Se calculează rezultatele...</div>;
+  const medals = ["🥇","🥈","🥉"];
+  return (
+    <div className="relative min-h-[600px] px-4 py-6">
+      <ConfettiBurst />
+      <div className="text-center mb-6">
+        <h2 className="display text-3xl">Prietenometru</h2>
+        <p className="text-white/50 text-sm mt-1">cât de bine te cunosc</p>
+      </div>
+      {results.map((r,i)=>(
+        <div key={r.name} className="podium-anim rounded-2xl border border-white/10 bg-white/[0.04] p-4 mb-3" style={{animationDelay:`${i*150}ms`}}>
+          <div className="flex items-center gap-3">
+            <span className="display text-lg text-amber-300 w-6 text-center">{medals[i]||`#${i+1}`}</span>
+            <div className="flex-1"><p>{r.name}</p><p className="text-xs text-white/40">{r.title?.icon} {r.title?.label}</p></div>
+            <p className="display text-2xl text-amber-300">{r.pct}%</p>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/10 mt-3 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-amber-300 to-pink-400" style={{width:`${r.pct}%`}} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
