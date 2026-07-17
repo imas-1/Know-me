@@ -127,13 +127,14 @@ const QUESTION_BANK = [
   { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e mâncarea ta preferată?" },
   { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e filmul tău preferat?" },
   { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e culoarea ta preferată?" },
-  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, unde vrei să călătorești cel mai mult?" },
-  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e jocul tău preferat?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e animalul tău preferat?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e băutura ta preferată?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e anotimpul tău preferat?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "{name}, care e cântărețul sau trupa ta preferată?" },
   // Gândește ca mine
-  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "{name}, dacă ai câștiga un milion de euro, ce ai face primul?" },
+  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "{name}, ce faci cel mai des în timpul liber?" },
   { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "{name}, ce superputere ai alege?" },
-  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "{name}, telefonul sau mașina — la ce ai renunța un an?" },
-  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "{name}, cu cine ai lua cina, din orice persoană din lume?" },
+  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "{name}, ce ți-ai cumpăra primul dacă ai câștiga la loterie?" },
   // This or That
   { round: "This or That", icon: "⚡", type: "choice", options: ["Pizza", "Burger"], prompt: "{name}: Pizza sau Burger?" },
   { round: "This or That", icon: "⚡", type: "choice", options: ["Mare", "Munte"], prompt: "{name}: Mare sau Munte?" },
@@ -141,30 +142,27 @@ const QUESTION_BANK = [
   { round: "This or That", icon: "⚡", type: "choice", options: ["Zi", "Noapte"], prompt: "{name}: Zi sau Noapte?" },
   { round: "This or That", icon: "⚡", type: "choice", options: ["Câine", "Pisică"], prompt: "{name}: Câine sau Pisică?" },
   { round: "This or That", icon: "⚡", type: "choice", options: ["Vacanță", "Bani"], prompt: "{name}: Vacanță sau Bani?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Ceai", "Cafea"], prompt: "{name}: Ceai sau Cafea?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Dulce", "Sărat"], prompt: "{name}: Dulce sau Sărat?" },
   // Story Time
-  { round: "Story Time", icon: "📖", type: "text", prompt: "{name}, care e cea mai mare prostie făcută la 12 ani? (începe povestea)" },
-  { round: "Story Time", icon: "📖", type: "text", prompt: "{name}, o întâmplare amuzantă din copilărie (începe povestea)" },
+  { round: "Story Time", icon: "📖", type: "text", prompt: "{name}, spune o amintire frumoasă din copilărie (câteva cuvinte sunt de-ajuns)" },
   // First Thing
   { round: "First Thing", icon: "🌅", type: "text", prompt: "{name}, care e primul lucru pe care îl faci dimineața?" },
   { round: "First Thing", icon: "🌅", type: "text", prompt: "{name}, care e prima aplicație pe care o deschizi pe telefon?" },
-  { round: "First Thing", icon: "🌅", type: "text", prompt: "{name}, care e primul lucru pe care îl cumperi la supermarket?" },
   // Finish My Sentence
   { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "{name}, completează: Nu pot trăi fără..." },
   { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "{name}, completează: Cel mai mare vis al meu este..." },
-  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "{name}, completează: Mă enervează cel mai mult când..." },
-  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "{name}, completează: Când eram mic visam să..." },
+  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "{name}, completează: Mă relaxez cel mai bine când..." },
   // Award Me
   { round: "Award Me", icon: "🏅", type: "choice", options: ["Cel mai amuzant", "Cel mai organizat", "Cel mai aventuros", "Cel mai încăpățânat"], prompt: "{name}, ce premiu ți s-ar potrivi cel mai bine?" },
   // Secret Talent
-  { round: "Secret Talent", icon: "🎭", type: "text", prompt: "{name}, care e un talent surprinzător al tău?" },
+  { round: "Secret Talent", icon: "🎭", type: "text", prompt: "{name}, care e un talent al tău (chiar și unul mic)?" },
   // Impersonate Me (live vote)
   { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită-l/o pe {name} când râde — hostul votează live cea mai bună interpretare." },
   { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită cum dansează {name} — hostul votează live cea mai bună interpretare." },
-  { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită cum reacționează {name} când pierde la un joc — hostul votează live." },
   // Fake Answer (host supplies real answer + 3 decoys)
-  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "{name}, care e cea mai mare frică a ta?" },
-  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "{name}, ce ai face dacă ai fi invizibil o zi?" },
-  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "{name}, care e cel mai ciudat vis pe care l-ai avut?" },
+  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "{name}, care e mâncarea pe care n-o suporți?" },
+  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "{name}, care e locul tău preferat din lume?" },
   // Timeline (host sets the real chronological order; players guess it)
   { round: "Timeline", icon: "📅", type: "timeline", prompt: "{name}, ordonează cronologic, de la primul la ultimul:",
     items: ["Primul telefon", "Prima bicicletă", "Prima excursie", "Primul animal de companie"] },
