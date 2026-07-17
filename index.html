@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Know Me</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" onerror="document.title='CDN FAIL: react'"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" onerror="document.title='CDN FAIL: react-dom'"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js" onerror="document.title='CDN FAIL: babel'"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js" onerror="document.title='CDN FAIL: firebase-app'"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js" onerror="document.title='CDN FAIL: firebase-auth'"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js" onerror="document.title='CDN FAIL: firebase-firestore'"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   * { box-sizing: border-box; }
@@ -35,30 +38,70 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react">
+<div id="err-banner" style="display:none; position:fixed; inset:0; z-index:9999; background:#180F28; color:#fca5a5; font-family:monospace; font-size:13px; padding:20px; overflow:auto; white-space:pre-wrap;"></div>
+<script>
+  function showError(msg) {
+    var el = document.getElementById("err-banner");
+    el.style.display = "block";
+    el.textContent += "⚠️ Eroare:\n\n" + msg + "\n\n---\n\n";
+    window.__errShown = true;
+  }
+  window.addEventListener("error", function (e) { showError((e.error && e.error.stack) || e.message); });
+  window.addEventListener("unhandledrejection", function (e) { showError((e.reason && e.reason.stack) || e.reason); });
+  setTimeout(function () {
+    var root = document.getElementById("root");
+    if (root && !root.hasChildNodes() && !window.__errShown) showError("Aplicația nu s-a încărcat în 6 secunde (root gol). Verifică fereastra de erori de mai sus sau conexiunea la internet / blocarea unui domeniu CDN.");
+  }, 6000);
+</script>
+<script type="text/plain" id="app-src">
 const { useState, useEffect, useMemo, useRef } = React;
 
-/* ---------- Firebase (real backend) ---------- */
-import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js").then(async (appMod) => {
-  const authMod = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js");
-  const fsMod = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+/* ---------- Firebase (real backend, compat SDK — classic scripts, no ES module import) ---------- */
+(function () {
+  try {
+    const firebaseConfig = {
+      apiKey: "AIzaSyDvFEtgMdIdIkS54XCJKgMracslAOJXda0",
+      authDomain: "know-me-8c8c4.firebaseapp.com",
+      projectId: "know-me-8c8c4",
+      storageBucket: "know-me-8c8c4.firebasestorage.app",
+      messagingSenderId: "797680308314",
+      appId: "1:797680308314:web:99b7aa9e808875d4564863",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyDvFEtgMdIdIkS54XCJKgMracslAOJXda0",
-    authDomain: "know-me-8c8c4.firebaseapp.com",
-    projectId: "know-me-8c8c4",
-    storageBucket: "know-me-8c8c4.firebasestorage.app",
-    messagingSenderId: "797680308314",
-    appId: "1:797680308314:web:99b7aa9e808875d4564863",
-  };
-  const app = appMod.initializeApp(firebaseConfig);
-  const auth = authMod.getAuth(app);
-  const db = fsMod.getFirestore(app);
+    function pathRef(base, segs) {
+      let ref = base;
+      segs.forEach((seg, i) => { ref = (i % 2 === 0) ? ref.collection(seg) : ref.doc(seg); });
+      return ref;
+    }
+    function wrapDocSnap(snap) { return { exists: () => snap.exists, data: () => snap.data(), id: snap.id }; }
 
-  const fb = { ...fsMod, auth, db, signInAnonymously: authMod.signInAnonymously, onAuthStateChanged: authMod.onAuthStateChanged };
-  window.__fb = fb;
-  window.dispatchEvent(new Event("fb-ready"));
-});
+    const fb = {
+      auth, db,
+      doc: (base, ...segs) => pathRef(base, segs),
+      collection: (base, ...segs) => pathRef(base, segs),
+      onSnapshot: (ref, cb, errCb) => ref.onSnapshot((snap) => {
+        cb(snap.docs ? snap : wrapDocSnap(snap));
+      }, errCb),
+      addDoc: (colRef, data) => colRef.add(data),
+      setDoc: (docRef, data) => docRef.set(data),
+      getDoc: async (docRef) => wrapDocSnap(await docRef.get()),
+      getDocs: async (ref) => await ref.get(),
+      updateDoc: (docRef, data) => docRef.update(data),
+      query: (colRef, ...clauses) => clauses.reduce((r, fn) => fn(r), colRef),
+      orderBy: (field) => (ref) => ref.orderBy(field),
+      serverTimestamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+      onAuthStateChanged: (a, cb) => a.onAuthStateChanged(cb),
+      signInAnonymously: (a) => a.signInAnonymously(),
+    };
+    window.__fb = fb;
+    window.dispatchEvent(new Event("fb-ready"));
+  } catch (err) {
+    showError("Firebase init failed: " + (err.stack || err.message || err));
+  }
+})();
 
 function playTone(freq, duration = 0.15, type = "sine") {
   try {
@@ -79,18 +122,51 @@ const sfx = {
 
 /* ---------- Question bank (host fills these to create a game) ---------- */
 const QUESTION_BANK = [
+  // Cât mă cunoști?
   { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Care este mâncarea mea preferată?" },
   { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Care este filmul meu preferat?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Care este culoarea mea preferată?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Unde vreau să călătoresc cel mai mult?" },
+  { round: "Cât mă cunoști?", icon: "🧠", type: "text", prompt: "Care este jocul meu preferat?" },
+  // Gândește ca mine
   { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "Dacă aș câștiga un milion de euro, ce aș face primul?" },
+  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "Ce superputere aș alege?" },
+  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "Telefonul sau mașina — la ce aș renunța un an?" },
+  { round: "Gândește ca mine", icon: "💭", type: "text", prompt: "Cu cine aș lua cina, din orice persoană din lume?" },
+  // This or That
   { round: "This or That", icon: "⚡", type: "choice", options: ["Pizza", "Burger"], prompt: "Pizza sau Burger?" },
   { round: "This or That", icon: "⚡", type: "choice", options: ["Mare", "Munte"], prompt: "Mare sau Munte?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Netflix", "YouTube"], prompt: "Netflix sau YouTube?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Zi", "Noapte"], prompt: "Zi sau Noapte?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Câine", "Pisică"], prompt: "Câine sau Pisică?" },
+  { round: "This or That", icon: "⚡", type: "choice", options: ["Vacanță", "Bani"], prompt: "Vacanță sau Bani?" },
+  // Story Time
   { round: "Story Time", icon: "📖", type: "text", prompt: "Cea mai mare prostie făcută la 12 ani (începe povestea)" },
+  { round: "Story Time", icon: "📖", type: "text", prompt: "O întâmplare amuzantă din copilărie (începe povestea)" },
+  // First Thing
   { round: "First Thing", icon: "🌅", type: "text", prompt: "Primul lucru pe care îl fac dimineața?" },
+  { round: "First Thing", icon: "🌅", type: "text", prompt: "Prima aplicație pe care o deschid pe telefon?" },
+  { round: "First Thing", icon: "🌅", type: "text", prompt: "Primul lucru pe care îl cumpăr la supermarket?" },
+  // Finish My Sentence
   { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "Nu pot trăi fără..." },
-  { round: "Award Me", icon: "🏅", type: "choice", options: ["Cel mai amuzant", "Cel mai organizat", "Cel mai aventuros"], prompt: "Ce premiu ți s-ar potrivi?" },
+  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "Cel mai mare vis al meu este..." },
+  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "Mă enervează cel mai mult când..." },
+  { round: "Finish My Sentence", icon: "✍️", type: "text", prompt: "Când eram mic visam să..." },
+  // Award Me
+  { round: "Award Me", icon: "🏅", type: "choice", options: ["Cel mai amuzant", "Cel mai organizat", "Cel mai aventuros", "Cel mai încăpățânat"], prompt: "Ce premiu ți s-ar potrivi cel mai bine?" },
+  // Secret Talent
   { round: "Secret Talent", icon: "🎭", type: "text", prompt: "Un talent surprinzător al tău?" },
+  // Impersonate Me (live vote)
   { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită-mă când râd — hostul votează live cea mai bună interpretare." },
   { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită cum dansez — hostul votează live cea mai bună interpretare." },
+  { round: "Impersonate Me", icon: "🎬", type: "vote", prompt: "Imită cum reacționez când pierd la un joc — hostul votează live." },
+  // Fake Answer (host supplies real answer + 3 decoys)
+  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "Care este cea mai mare frică a mea?" },
+  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "Ce aș face dacă aș fi invizibil o zi?" },
+  { round: "Fake Answer", icon: "🎲", type: "fake", prompt: "Care e cel mai ciudat vis pe care l-am avut?" },
+  // Timeline (host sets the real chronological order; players guess it)
+  { round: "Timeline", icon: "📅", type: "timeline", prompt: "Ordonează cronologic, de la primul la ultimul:",
+    items: ["Primul telefon", "Prima bicicletă", "Prima excursie", "Primul animal de companie"] },
 ];
 
 const TITLES = [
@@ -107,6 +183,32 @@ function fuzzyMatch(a, b) {
   if (!na || !nb) return false;
   if (na === nb) return true;
   return na.includes(nb) || nb.includes(na);
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+const DURATIONS = { scurt: 8, mediu: 16, lung: QUESTION_BANK.length };
+function pickQuestions(duration) {
+  const count = DURATIONS[duration] || 8;
+  // group by round, take round-robin so the mix of round types stays varied
+  const byRound = {};
+  QUESTION_BANK.forEach((q) => { (byRound[q.round] ||= []).push(q); });
+  Object.keys(byRound).forEach((r) => { byRound[r] = shuffle(byRound[r]); });
+  const rounds = shuffle(Object.keys(byRound));
+  const picked = [];
+  let i = 0;
+  while (picked.length < count) {
+    let addedAny = false;
+    for (const r of rounds) {
+      if (byRound[r][i]) { picked.push(byRound[r][i]); addedAny = true; }
+      if (picked.length >= count) break;
+    }
+    if (!addedAny) break;
+    i++;
+  }
+  return shuffle(picked).slice(0, count);
 }
 
 /* ---------- Shared UI bits ---------- */
@@ -136,6 +238,7 @@ function App() {
   const [uid, setUid] = useState(null);
   const [screen, setScreen] = useState("home"); // home | create | lobby | play | results
   const [gameId, setGameId] = useState(null);
+  const [chosenQuestions, setChosenQuestions] = useState([]);
   const [roomCode, setRoomCode] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [hostName, setHostName] = useState("Andreea");
@@ -148,7 +251,7 @@ function App() {
     function onFbReady() {
       const fb = window.__fb;
       fb.onAuthStateChanged(fb.auth, (u) => { if (u) { setUid(u.uid); setReady(true); } });
-      fb.signInAnonymously(fb.auth).catch(console.error);
+      fb.signInAnonymously(fb.auth).catch((err) => showError("Autentificare eșuată: " + (err.code || "") + " " + (err.message || err)));
     }
     if (window.__fb) onFbReady(); else window.addEventListener("fb-ready", onFbReady);
   }, []);
@@ -168,68 +271,109 @@ function App() {
     return () => { unsubRoom(); unsubPlayers(); };
   }, [roomCode]);
 
-  async function createGame(answersByIndex) {
+  async function createGame(chosenQuestions, answersByIndex) {
     const fb = window.__fb;
     const gameRef = await fb.addDoc(fb.collection(fb.db, "games"), { hostId: uid, createdAt: fb.serverTimestamp(), status: "ready" });
-    for (let i = 0; i < QUESTION_BANK.length; i++) {
-      const q = QUESTION_BANK[i];
-      const hostAnswer = q.type === "vote" ? "WINNER" : (answersByIndex[i] || "");
-      await fb.addDoc(fb.collection(fb.db, "games", gameRef.id, "questions"), {
-        ...q, hostAnswer, order: i,
-      });
+    const built = chosenQuestions.map((q, i) => {
+      if (q.type === "vote") return { ...q, hostAnswer: "WINNER", order: i };
+      if (q.type === "fake") {
+        const a = answersByIndex[i] || {};
+        return { ...q, hostAnswer: a.real || "", fakeOptions: a.fakes || ["", "", ""], order: i };
+      }
+      if (q.type === "timeline") {
+        const order = answersByIndex[i] || [];
+        return { ...q, hostAnswer: JSON.stringify(order), order: i };
+      }
+      return { ...q, hostAnswer: answersByIndex[i] || "", order: i };
+    });
+    for (const q of built) {
+      await fb.addDoc(fb.collection(fb.db, "games", gameRef.id, "questions"), q);
     }
     setGameId(gameRef.id);
-    setQuestions(QUESTION_BANK.map((q, i) => ({ ...q, hostAnswer: answersByIndex[i] || "", order: i })));
+    setQuestions(built);
     return gameRef.id;
   }
 
   async function createRoom(gId) {
     const fb = window.__fb;
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-    await fb.setDoc(fb.doc(fb.db, "rooms", code), {
-      hostId: uid, hostName, gameId: gId, status: "lobby",
-      currentQuestionIndex: 0, revealed: false, createdAt: fb.serverTimestamp(),
-    });
-    setRoomCode(code); setIsHost(true); setScreen("lobby");
+    try {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+      await fb.setDoc(fb.doc(fb.db, "rooms", code), {
+        hostId: uid, hostName, gameId: gId, status: "lobby",
+        currentQuestionIndex: 0, revealed: false, createdAt: fb.serverTimestamp(),
+      });
+      setRoomCode(code); setIsHost(true); setScreen("lobby");
+    } catch (err) {
+      showError("Creare cameră eșuată: " + (err.message || err));
+    }
   }
 
   async function joinRoom(code, name) {
     const fb = window.__fb;
-    const roomSnap = await fb.getDoc(fb.doc(fb.db, "rooms", code));
-    if (!roomSnap.exists()) { alert("Cod invalid"); return; }
-    await fb.addDoc(fb.collection(fb.db, "rooms", code, "players"), { name, uid, joinedAt: fb.serverTimestamp(), score: 0 });
-    const gSnap = roomSnap.data();
-    const qSnap = await fb.getDocs(fb.query(fb.collection(fb.db, "games", gSnap.gameId, "questions"), fb.orderBy("order")));
-    setQuestions(qSnap.docs.map((d) => d.data()));
-    setRoomCode(code); setIsHost(false); setScreen("lobby");
+    try {
+      const roomSnap = await fb.getDoc(fb.doc(fb.db, "rooms", code));
+      if (!roomSnap.exists()) { alert("Cod invalid"); return; }
+      await fb.addDoc(fb.collection(fb.db, "rooms", code, "players"), { name, uid, joinedAt: fb.serverTimestamp(), score: 0 });
+      const gSnap = roomSnap.data();
+      const qSnap = await fb.getDocs(fb.query(fb.collection(fb.db, "games", gSnap.gameId, "questions"), fb.orderBy("order")));
+      setQuestions(qSnap.docs.map((d) => d.data()));
+      setRoomCode(code); setIsHost(false); setScreen("lobby");
+    } catch (err) {
+      showError("Alăturare eșuată: " + (err.message || err));
+    }
   }
 
   async function submitGuess(guess) {
     const fb = window.__fb;
-    await fb.addDoc(fb.collection(fb.db, "rooms", roomCode, "answers"), {
-      playerId: uid, guess, roundIndex: room.currentQuestionIndex, answeredAt: fb.serverTimestamp(),
-    });
+    try {
+      await fb.addDoc(fb.collection(fb.db, "rooms", roomCode, "answers"), {
+        playerId: uid, guess, roundIndex: room.currentQuestionIndex, answeredAt: fb.serverTimestamp(),
+      });
+    } catch (err) {
+      showError("Trimiterea răspunsului a eșuat: " + (err.code || "") + " " + (err.message || err));
+    }
   }
 
   async function submitVote(winnerUid) {
     const fb = window.__fb;
-    await fb.addDoc(fb.collection(fb.db, "rooms", roomCode, "answers"), {
-      playerId: winnerUid, guess: "WINNER", roundIndex: room.currentQuestionIndex, answeredAt: fb.serverTimestamp(),
-    });
+    try {
+      await fb.addDoc(fb.collection(fb.db, "rooms", roomCode, "answers"), {
+        playerId: winnerUid, guess: "WINNER", roundIndex: room.currentQuestionIndex, answeredAt: fb.serverTimestamp(),
+      });
+    } catch (err) {
+      showError("Vot eșuat: " + (err.message || err));
+    }
   }
 
   async function revealAnswer() {
     const fb = window.__fb;
-    await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { revealed: true });
-    sfx.cheer();
+    try {
+      await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { revealed: true });
+      sfx.cheer();
+    } catch (err) {
+      showError("Reveal eșuat: " + (err.message || err));
+    }
   }
 
   async function nextQuestion() {
     const fb = window.__fb;
-    const next = (room.currentQuestionIndex || 0) + 1;
-    if (next >= questions.length) { await finishGame(); return; }
-    await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { currentQuestionIndex: next, revealed: false });
+    try {
+      const next = (room.currentQuestionIndex || 0) + 1;
+      if (next >= questions.length) { await finishGame(); return; }
+      await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { currentQuestionIndex: next, revealed: false });
+    } catch (err) {
+      showError("Avansare rundă eșuată: " + (err.message || err));
+    }
+  }
+
+  async function savePrediction(name) {
+    const fb = window.__fb;
+    try {
+      await fb.updateDoc(fb.doc(fb.db, "rooms", roomCode), { prediction: name });
+    } catch (err) {
+      showError("Salvare predicție eșuată: " + (err.message || err));
+    }
   }
 
   async function finishGame() {
@@ -261,12 +405,13 @@ function App() {
   return (
     <div className="min-h-screen flex justify-center py-6 px-4">
       <div className="w-full max-w-md">
-        {screen === "home" && <HomeScreen onCreate={() => setScreen("create")} onJoin={() => setScreen("join")} />}
-        {screen === "create" && <CreateGameScreen onDone={async (answers) => { const gId = await createGame(answers); await createRoom(gId); }} onBack={() => setScreen("home")} />}
+        {screen === "home" && <HomeScreen onCreate={() => setScreen("duration")} onJoin={() => setScreen("join")} />}
+        {screen === "duration" && <DurationScreen onBack={() => setScreen("home")} onPick={(key) => { setChosenQuestions(pickQuestions(key)); setScreen("create"); }} />}
+        {screen === "create" && <CreateGameScreen questions={chosenQuestions} onDone={async (answers) => { const gId = await createGame(chosenQuestions, answers); await createRoom(gId); }} onBack={() => setScreen("duration")} />}
         {screen === "join" && <JoinScreen onBack={() => setScreen("home")} onJoin={joinRoom} />}
-        {screen === "lobby" && <LobbyScreen room={room} roomCode={roomCode} players={players} isHost={isHost} onStart={async () => { const fb = window.__fb; await fb.updateDoc(fb.doc(fb.db,"rooms",roomCode), {status:"playing"}); }} />}
+        {screen === "lobby" && <LobbyScreen room={room} roomCode={roomCode} players={players} isHost={isHost} onPredict={savePrediction} onStart={async () => { const fb = window.__fb; await fb.updateDoc(fb.doc(fb.db,"rooms",roomCode), {status:"playing"}); }} />}
         {screen === "play" && <PlayScreen room={room} questions={questions} isHost={isHost} players={players} onGuess={submitGuess} onVote={submitVote} onReveal={revealAnswer} onNext={nextQuestion} />}
-        {screen === "results" && <ResultsScreen results={results} hostName={hostName} />}
+        {screen === "results" && <ResultsScreen results={results} hostName={hostName} prediction={room?.prediction} />}
       </div>
     </div>
   );
@@ -288,18 +433,67 @@ function HomeScreen({ onCreate, onJoin }) {
   );
 }
 
-function CreateGameScreen({ onDone, onBack }) {
+function DurationScreen({ onPick, onBack }) {
+  const opts = [
+    { key: "scurt", label: "Joc scurt", desc: `${DURATIONS.scurt} întrebări · ~10 min` },
+    { key: "mediu", label: "Joc mediu", desc: `${DURATIONS.mediu} întrebări · ~20 min` },
+    { key: "lung", label: "Joc lung", desc: `${DURATIONS.lung} întrebări · toate rundele` },
+  ];
+  return (
+    <div className="relative min-h-[600px] px-4 py-6">
+      <button onClick={onBack} className="text-white/40 text-sm mb-6">← înapoi</button>
+      <h2 className="display text-2xl mb-2">Cât de lung vrei jocul?</h2>
+      <p className="text-white/50 text-sm mb-6">Rundele sunt alese automat, diferit de fiecare dată — fiecare petrecere e unică.</p>
+      <div className="flex flex-col gap-3">
+        {opts.map(o => (
+          <button key={o.key} onClick={()=>onPick(o.key)} className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-left hover:border-amber-300/40">
+            <p className="font-semibold">{o.label}</p>
+            <p className="text-white/40 text-xs mt-1">{o.desc}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TimelineOrderPicker({ items, value, onChange }) {
+  const chosen = value || [];
+  const remaining = items.filter((it) => !chosen.includes(it));
+  return (
+    <div>
+      {chosen.length > 0 && (
+        <div className="flex flex-col gap-2 mb-4">
+          {chosen.map((it, i) => (
+            <div key={it} className="flex items-center gap-3 rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-3">
+              <span className="display text-amber-300 w-5">{i+1}</span>
+              <span className="flex-1 text-amber-100">{it}</span>
+              <button onClick={()=>onChange(chosen.filter(x=>x!==it))} className="text-white/40 text-xs">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-white/40 text-xs mb-2">{remaining.length ? "Atinge în ordine:" : "Gata — ordinea e completă."}</p>
+      <div className="flex flex-col gap-2">
+        {remaining.map((it) => (
+          <button key={it} onClick={()=>onChange([...chosen, it])} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-white/85">{it}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CreateGameScreen({ questions, onDone, onBack }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState({});
-  const q = QUESTION_BANK[step];
-  const isLast = step === QUESTION_BANK.length - 1;
+  const q = questions[step];
+  const isLast = step === questions.length - 1;
   const [busy, setBusy] = useState(false);
 
   return (
     <div className="relative min-h-[600px] px-4 py-6">
       <button onClick={onBack} className="text-white/40 text-sm mb-6">← înapoi</button>
       <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-6">
-        <div className="h-full bg-gradient-to-r from-amber-300 to-pink-400 transition-all" style={{ width: `${((step+1)/QUESTION_BANK.length)*100}%` }} />
+        <div className="h-full bg-gradient-to-r from-amber-300 to-pink-400 transition-all" style={{ width: `${((step+1)/questions.length)*100}%` }} />
       </div>
       <p className="text-xs uppercase tracking-widest text-pink-300/80">{q.icon} {q.round}</p>
       <h2 className="display text-2xl mt-2 mb-5">{q.prompt}</h2>
@@ -311,6 +505,25 @@ function CreateGameScreen({ onDone, onBack }) {
           {q.options.map(opt => (
             <button key={opt} onClick={()=>setAnswers({...answers,[step]:opt})}
               className={`rounded-2xl border px-5 py-3.5 text-left ${answers[step]===opt ? "border-amber-300/60 bg-amber-300/10 text-amber-200":"border-white/10 bg-white/[0.04] text-white/85"}`}>{opt}</button>
+          ))}
+        </div>
+      ) : q.type === "timeline" ? (
+        <TimelineOrderPicker items={q.items} value={answers[step]||[]} onChange={(order)=>setAnswers({...answers,[step]:order})} />
+      ) : q.type === "fake" ? (
+        <div className="flex flex-col gap-2.5">
+          <p className="text-white/40 text-xs">Răspunsul real:</p>
+          <input value={(answers[step]||{}).real||""} onChange={(e)=>setAnswers({...answers,[step]:{...(answers[step]||{}), real:e.target.value}})}
+            className="w-full rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-3 text-white outline-none focus:border-emerald-400/60" placeholder="Răspunsul adevărat..." />
+          <p className="text-white/40 text-xs mt-2">3 răspunsuri false (credibile):</p>
+          {[0,1,2].map(fi => (
+            <input key={fi} value={((answers[step]||{}).fakes||["","",""])[fi]||""}
+              onChange={(e)=>{
+                const cur = answers[step]||{};
+                const fakes = [...(cur.fakes||["","",""])];
+                fakes[fi] = e.target.value;
+                setAnswers({...answers,[step]:{...cur, fakes}});
+              }}
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none focus:border-amber-300/50" placeholder={`Răspuns fals ${fi+1}...`} />
           ))}
         </div>
       ) : (
@@ -341,7 +554,7 @@ function JoinScreen({ onBack, onJoin }) {
   );
 }
 
-function LobbyScreen({ room, roomCode, players, isHost, onStart }) {
+function LobbyScreen({ room, roomCode, players, isHost, onPredict, onStart }) {
   return (
     <div className="relative min-h-[600px] px-4 py-6">
       <Spotlight /><PartyBg />
@@ -358,6 +571,19 @@ function LobbyScreen({ room, roomCode, players, isHost, onStart }) {
         ))}
         {players.length===0 && <p className="text-white/30 text-sm">se așteaptă jucători...</p>}
       </div>
+      {isHost && players.length > 0 && (
+        <div className="relative z-10 mt-6">
+          <p className="text-xs uppercase tracking-widest text-white/40 mb-3">🔮 Predicție secretă — cine crezi că va câștiga?</p>
+          <div className="flex flex-wrap gap-2">
+            {players.map((p) => (
+              <button key={p.id} onClick={()=>onPredict(p.name)}
+                className={`rounded-full border px-4 py-2 text-sm ${room?.prediction===p.name ? "border-amber-300/60 bg-amber-300/10 text-amber-200" : "border-white/10 bg-white/[0.04] text-white/70"}`}>
+                {p.name} {room?.prediction===p.name && "🔮"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {isHost && <div className="relative z-10 mt-6"><Primary onClick={onStart}>Începe jocul</Primary></div>}
       {!isHost && <p className="relative z-10 mt-6 text-center text-white/40 text-sm">Se așteaptă ca hostul să înceapă jocul...</p>}
     </div>
@@ -369,17 +595,27 @@ function PlayScreen({ room, questions, isHost, players, onGuess, onVote, onRevea
   const q = questions[idx];
   const [guess, setGuess] = useState("");
   const [voted, setVoted] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
   const [phase, setPhase] = useState("answering");
   const [countStep, setCountStep] = useState(0);
   const COUNT = ["🥁","3","2","1","💥"];
 
-  useEffect(() => { setPhase("answering"); setGuess(""); setVoted(null); }, [idx]);
+  useEffect(() => { setPhase("answering"); setGuess(""); setVoted(null); setSubmitted(false); }, [idx]);
   useEffect(() => {
     if (room?.revealed) { setPhase("countdown"); setCountStep(0);
       let s=0; const t=setInterval(()=>{ s++; if(s<COUNT.length){setCountStep(s); sfx.drum();} else {clearInterval(t); setPhase("revealed"); sfx.cheer();} },380);
       return ()=>clearInterval(t);
     }
   }, [room?.revealed]);
+
+  const fakeOpts = useMemo(() => {
+    if (!q || q.type !== "fake") return null;
+    const all = [q.hostAnswer, ...(q.fakeOptions || [])].filter(Boolean);
+    return shuffle(all);
+  }, [q]);
+  const timelineItems = useMemo(() => (q && q.type === "timeline") ? shuffle(q.items) : null, [q]);
+  const [timelineOrder, setTimelineOrder] = useState([]);
+  useEffect(() => { setTimelineOrder([]); }, [idx]);
 
   if (!q) return <div className="p-8 text-center text-white/50">Se încarcă întrebarea...</div>;
 
@@ -406,22 +642,67 @@ function PlayScreen({ room, questions, isHost, players, onGuess, onVote, onRevea
         )
       )}
 
-      {phase !== "revealed" && q.type !== "vote" && (
-        q.type === "choice" ? (
+      {phase !== "revealed" && q.type === "timeline" && (
+        isHost ? (
+          <p className="text-white/40 text-sm rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center">
+            📅 Tu ai stabilit deja ordinea reală — jucătorii ghicesc acum.
+          </p>
+        ) : (
+          <TimelineOrderPicker items={timelineItems} value={timelineOrder} onChange={(order) => {
+            setTimelineOrder(order);
+            if (order.length === timelineItems.length) onGuess(JSON.stringify(order));
+          }} />
+        )
+      )}
+
+      {phase !== "revealed" && q.type === "fake" && (
+        isHost ? (
+          <p className="text-white/40 text-sm rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center">
+            🎲 Tu ai completat deja răspunsul real — jucătorii aleg acum din cele 4 variante.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {fakeOpts.map(opt=>(
+              <button key={opt} onClick={()=>{setGuess(opt); onGuess(opt);}} className={`rounded-2xl border px-5 py-3.5 text-left ${guess===opt?"border-amber-300/60 bg-amber-300/10 text-amber-200":"border-white/10 bg-white/[0.04]"}`}>{opt}</button>
+            ))}
+          </div>
+        )
+      )}
+
+      {phase !== "revealed" && q.type !== "vote" && q.type !== "fake" && q.type !== "timeline" && (
+        isHost ? (
+          <p className="text-white/40 text-sm rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center">
+            ✅ Tu ai completat deja răspunsul — jucătorii ghicesc acum.
+          </p>
+        ) : q.type === "choice" ? (
           <div className="flex flex-col gap-3">
             {q.options.map(opt=>(<button key={opt} onClick={()=>{setGuess(opt); onGuess(opt);}} className={`rounded-2xl border px-5 py-3.5 text-left ${guess===opt?"border-amber-300/60 bg-amber-300/10 text-amber-200":"border-white/10 bg-white/[0.04]"}`}>{opt}</button>))}
           </div>
         ) : (
           <div className="flex gap-2">
-            <Input value={guess} onChange={(e)=>setGuess(e.target.value)} placeholder="Ghicește..." className="mb-0" />
-            <button onClick={()=>onGuess(guess)} className="rounded-2xl bg-amber-300 text-[#241531] font-bold px-4">✓</button>
+            <Input value={guess} onChange={(e)=>setGuess(e.target.value)} placeholder="Ghicește..." className="mb-0" disabled={submitted} />
+            <button
+              onClick={()=>{ if(!guess.trim()) return; onGuess(guess); setSubmitted(true); }}
+              disabled={submitted}
+              className={`rounded-2xl font-bold px-4 ${submitted ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/40" : "bg-amber-300 text-[#241531]"}`}
+            >
+              {submitted ? "✓ Trimis" : "✓"}
+            </button>
           </div>
         )
       )}
 
       {phase === "revealed" && (
         <div className="rounded-2xl border border-emerald-400/40 bg-emerald-400/10 p-4 text-emerald-300 pop-anim">
-          {q.type === "vote" ? "🏆 Câștigătorul rundei a fost votat!" : <>✔️ Răspunsul real: <b>{q.hostAnswer}</b></>}
+          {q.type === "vote" ? "🏆 Câștigătorul rundei a fost votat!" :
+           q.type === "timeline" ? (
+             <div>
+               <p className="mb-2">✔️ Ordinea reală:</p>
+               <ol className="list-decimal list-inside space-y-1">
+                 {(() => { try { return JSON.parse(q.hostAnswer); } catch(e) { return []; } })().map((it) => (<li key={it}>{it}</li>))}
+               </ol>
+             </div>
+           ) : <>✔️ Răspunsul real: <b>{q.hostAnswer}</b></>}
         </div>
       )}
 
@@ -441,9 +722,207 @@ function PlayScreen({ room, questions, isHost, players, onGuess, onVote, onRevea
   );
 }
 
-function ResultsScreen({ results, hostName }) {
+/* ---------- Recap video generator (canvas + MediaRecorder, runs fully client-side) ---------- */
+function spawnConfetti(particles, W, H, count) {
+  const colors = ["#fcd34d", "#f472b6", "#60a5fa", "#4ade80", "#fb923c"];
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * W, y: -20 - Math.random() * 200,
+      vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 3,
+      size: 6 + Math.random() * 6, color: colors[i % colors.length],
+      rot: Math.random() * 360, vr: (Math.random() - 0.5) * 10,
+    });
+  }
+}
+function updateAndDrawConfetti(ctx, particles, W, H, dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+    if (p.y > H + 30) { particles.splice(i, 1); continue; }
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate((p.rot * Math.PI) / 180);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+    ctx.restore();
+  }
+}
+function drawBg(ctx, W, H) {
+  const g = ctx.createRadialGradient(W / 2, H * 0.25, 60, W / 2, H * 0.25, W * 0.9);
+  g.addColorStop(0, "#2a1f45"); g.addColorStop(1, "#180F28");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function wrapCenterText(ctx, text, cx, cy, maxWidth, lineHeight) {
+  const words = text.split(" "); let line = ""; const lines = [];
+  words.forEach((w) => {
+    const test = line ? line + " " + w : w;
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w; } else line = test;
+  });
+  if (line) lines.push(line);
+  const startY = cy - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((l, i) => ctx.fillText(l, cx, startY + i * lineHeight));
+}
+function easeOutBack(t) { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+function drawRecapFrame(ctx, W, H, t, results, hostName, particles) {
+  const SCENES = { intro: [0, 3], winner: [3, 8.5], awards: [8.5, 15], meter: [15, 20.5], outro: [20.5, 23] };
+  drawBg(ctx, W, H);
+  ctx.textAlign = "center";
+
+  if (t >= SCENES.intro[0] && t < SCENES.intro[1]) {
+    const local = t - SCENES.intro[0];
+    const scale = easeOutBack(clamp01(local / 0.6));
+    ctx.save(); ctx.translate(W / 2, H * 0.42); ctx.scale(scale, scale);
+    ctx.font = "120px sans-serif"; ctx.fillText("🎉", 0, 0);
+    ctx.restore();
+    ctx.fillStyle = "#ffffff"; ctx.font = "700 56px Georgia, serif";
+    ctx.fillText("Know Me", W / 2, H * 0.56);
+    ctx.fillStyle = "#fcd34d"; ctx.font = "600 30px sans-serif";
+    ctx.fillText(hostName || "", W / 2, H * 0.62);
+  } else if (t >= SCENES.winner[0] && t < SCENES.winner[1]) {
+    if (Math.abs(t - SCENES.winner[0]) < 0.05) spawnConfetti(particles, W, H, 60);
+    const local = t - SCENES.winner[0];
+    const scale = easeOutBack(clamp01(local / 0.6));
+    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "600 28px sans-serif";
+    ctx.fillText("🥇 CÂȘTIGĂTORUL", W / 2, H * 0.32);
+    ctx.save(); ctx.translate(W / 2, H * 0.46); ctx.scale(scale, scale);
+    ctx.fillStyle = "#fcd34d"; ctx.font = "700 68px Georgia, serif";
+    ctx.fillText((results[0] && results[0].name) || "—", 0, 0);
+    ctx.restore();
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "500 32px sans-serif";
+    ctx.fillText(`${(results[0] && results[0].pct) || 0}% ${(results[0] && results[0].title && results[0].title.icon) || ""}`, W / 2, H * 0.56);
+  } else if (t >= SCENES.awards[0] && t < SCENES.awards[1]) {
+    ctx.fillStyle = "#ffffff"; ctx.font = "700 40px Georgia, serif";
+    ctx.fillText("🏆 Titluri", W / 2, H * 0.18);
+    const local = t - SCENES.awards[0];
+    results.slice(0, 5).forEach((r, i) => {
+      const rowT = clamp01((local - i * 0.5) / 0.4);
+      if (rowT <= 0) return;
+      const y = H * 0.28 + i * 90 + (1 - easeOutBack(rowT)) * 40;
+      ctx.globalAlpha = rowT;
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillRect(W * 0.1, y - 34, W * 0.8, 60);
+      ctx.fillStyle = "#fff"; ctx.font = "600 28px sans-serif";
+      ctx.fillText(`${r.name}`, W * 0.14, y + 2);
+      ctx.fillStyle = "#fcd34d"; ctx.font = "26px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(`${(r.title && r.title.icon) || ""} ${(r.title && r.title.label) || ""}`, W * 0.86, y + 2);
+      ctx.textAlign = "center"; ctx.globalAlpha = 1;
+    });
+  } else if (t >= SCENES.meter[0] && t < SCENES.meter[1]) {
+    ctx.fillStyle = "#ffffff"; ctx.font = "700 40px Georgia, serif";
+    ctx.fillText("❤️ Prietenometru", W / 2, H * 0.18);
+    const local = t - SCENES.meter[0];
+    results.slice(0, 5).forEach((r, i) => {
+      const rowT = clamp01((local - i * 0.35) / 0.6);
+      const y = H * 0.28 + i * 100;
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.font = "600 26px sans-serif";
+      ctx.fillText(r.name, W * 0.1, y);
+      ctx.fillStyle = "rgba(255,255,255,0.1)";
+      ctx.fillRect(W * 0.1, y + 14, W * 0.8, 16);
+      ctx.fillStyle = "#fcd34d";
+      ctx.fillRect(W * 0.1, y + 14, W * 0.8 * (r.pct / 100) * rowT, 16);
+      ctx.textAlign = "right"; ctx.fillStyle = "#fcd34d"; ctx.font = "600 24px sans-serif";
+      ctx.fillText(`${Math.round(r.pct * rowT)}%`, W * 0.9, y - 2);
+      ctx.textAlign = "center";
+    });
+  } else if (t >= SCENES.outro[0]) {
+    if (Math.abs(t - SCENES.outro[0]) < 0.05) spawnConfetti(particles, W, H, 80);
+    ctx.fillStyle = "#ffffff"; ctx.font = "700 44px Georgia, serif";
+    wrapCenterText(ctx, "Mulțumim că ați jucat", W / 2, H * 0.42, W * 0.8, 54);
+    ctx.fillStyle = "#fcd34d"; ctx.font = "700 52px Georgia, serif";
+    ctx.fillText("Know Me 🎉", W / 2, H * 0.52);
+  }
+
+  updateAndDrawConfetti(ctx, particles, W, H);
+}
+
+const RECAP_DURATION = 23;
+
+function RecapVideo({ results, hostName }) {
+  const canvasRef = useRef(null);
+  const [state, setState] = useState("idle"); // idle | recording | done | error
+  const [progress, setProgress] = useState(0);
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [mime, setMime] = useState("video/webm");
+
+  function generate() {
+    const canvas = canvasRef.current;
+    const W = 720, H = 1280;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    let mimeType = "video/mp4";
+    if (!(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mimeType))) {
+      mimeType = "video/webm;codecs=vp9";
+      if (!(window.MediaRecorder && MediaRecorder.isTypeSupported(mimeType))) mimeType = "video/webm";
+    }
+    setMime(mimeType);
+    if (!window.MediaRecorder || !canvas.captureStream) {
+      setState("error"); return;
+    }
+    setState("recording"); setProgress(0);
+    const stream = canvas.captureStream(30);
+    let recorder;
+    try { recorder = new MediaRecorder(stream, { mimeType }); }
+    catch (e) { recorder = new MediaRecorder(stream); }
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      setVideoUrl(URL.createObjectURL(blob));
+      setState("done");
+    };
+    recorder.start();
+
+    const particles = [];
+    let startTs = null;
+    function loop(ts) {
+      if (!startTs) startTs = ts;
+      const elapsed = (ts - startTs) / 1000;
+      drawRecapFrame(ctx, W, H, elapsed, results, hostName, particles);
+      setProgress(Math.min(100, Math.round((elapsed / RECAP_DURATION) * 100)));
+      if (elapsed < RECAP_DURATION) requestAnimationFrame(loop);
+      else recorder.stop();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 mt-2 mb-6">
+      <p className="text-xs uppercase tracking-widest text-white/40 mb-3">🎬 Videoclip recap (20-25s)</p>
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      {state === "idle" && <Primary onClick={generate}>Generează videoclipul</Primary>}
+      {state === "recording" && (
+        <div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-2">
+            <div className="h-full bg-gradient-to-r from-amber-300 to-pink-400 transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="text-white/40 text-xs text-center">Se generează... {progress}%</p>
+        </div>
+      )}
+      {state === "done" && videoUrl && (
+        <div className="flex flex-col gap-2">
+          <video src={videoUrl} controls className="w-full rounded-xl" style={{ maxHeight: 320 }} />
+          <a href={videoUrl} download={`know-me-recap.${mime.includes("mp4") ? "mp4" : "webm"}`}>
+            <Primary>⬇️ Descarcă videoclipul</Primary>
+          </a>
+        </div>
+      )}
+      {state === "error" && (
+        <p className="text-rose-300 text-sm">Browserul acesta nu suportă generarea video (MediaRecorder/captureStream indisponibil). Încearcă din Chrome sau o versiune recentă de Safari.</p>
+      )}
+    </div>
+  );
+}
+
+function ResultsScreen({ results, hostName, prediction }) {
   if (!results) return <div className="p-8 text-center text-white/50">Se calculează rezultatele...</div>;
   const medals = ["🥇","🥈","🥉"];
+  const actualWinner = results[0]?.name;
+  const predictionCorrect = prediction && actualWinner && prediction === actualWinner;
   return (
     <div className="relative min-h-[600px] px-4 py-6">
       <ConfettiBurst />
@@ -451,6 +930,12 @@ function ResultsScreen({ results, hostName }) {
         <h2 className="display text-3xl">Prietenometru</h2>
         <p className="text-white/50 text-sm mt-1">cât de bine te cunosc</p>
       </div>
+      {prediction && (
+        <div className={`rounded-2xl border p-4 mb-5 text-center pop-anim ${predictionCorrect ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-rose-400/40 bg-rose-400/10 text-rose-300"}`}>
+          🔮 Predicția hostului: <b>{prediction}</b> câștigă — {predictionCorrect ? "corect! ✔️" : `greșit, a câștigat ${actualWinner} ✕`}
+        </div>
+      )}
+      <RecapVideo results={results} hostName={hostName} />
       {results.map((r,i)=>(
         <div key={r.name} className="podium-anim rounded-2xl border border-white/10 bg-white/[0.04] p-4 mb-3" style={{animationDelay:`${i*150}ms`}}>
           <div className="flex items-center gap-3">
@@ -467,7 +952,22 @@ function ResultsScreen({ results, hostName }) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+try {
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+} catch (err) {
+  showError("React render failed: " + (err.stack || err.message || err));
+}
+</script>
+<script>
+  try {
+    var srcCode = document.getElementById("app-src").textContent;
+    var transformed = Babel.transform(srcCode, { presets: ["react"] }).code;
+    var s = document.createElement("script");
+    s.textContent = transformed;
+    document.body.appendChild(s);
+  } catch (err) {
+    showError("Eroare la transformarea codului (Babel):\n\n" + (err.message || err));
+  }
 </script>
 </body>
 </html>
