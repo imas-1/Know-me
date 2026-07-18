@@ -973,6 +973,14 @@ function PlayScreen({ room, questions, isHost, players, answersLog, onGuess, onV
             <Ghost onClick={async ()=>{ setHostBusy(true); await onReveal(); setHostBusy(false); }} className={hostBusy?"opacity-40 pointer-events-none":""}>Arată răspunsul</Ghost>
             <Primary onClick={async ()=>{ setHostBusy(true); await onNext(); setHostBusy(false); }} className={hostBusy?"opacity-40 pointer-events-none":""}>{idx>=questions.length-1 ? "Finalizează jocul" : "Următoarea"}</Primary>
           </div>
+          {idx < questions.length - 1 && (
+            <button
+              onClick={async ()=>{ setHostBusy(true); await onNext(); setHostBusy(false); }}
+              className={`text-white/30 text-xs mt-1 ${hostBusy?"opacity-40 pointer-events-none":""}`}
+            >
+              ⏭️ Sari peste întrebarea asta
+            </button>
+          )}
           {hostBusy && <p className="text-center text-white/30 text-xs">se sincronizează cu jucătorii...</p>}
         </div>
       )}
